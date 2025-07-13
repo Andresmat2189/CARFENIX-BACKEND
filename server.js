@@ -6,26 +6,23 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const { cloudinary } = require('./config/cloudinary.config');
+
 const SECRET_KEY = 'clave_secreta_segura';
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-
-
+// Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/images', express.static(path.join(__dirname, 'public/images')));
 
-// Conexión a MongoDB
-mongoose.connect('mongodb://localhost:27017/auto_catalogo', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('✅ Conectado a MongoDB'))
-.catch(err => console.error('❌ Error al conectar a MongoDB:', err));
+// ✅ Conexión a MongoDB Atlas
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('✅ Conectado a MongoDB Atlas'))
+  .catch(err => console.error('❌ Error al conectar a MongoDB:', err));
 
-// Modelo Usuario
+// Esquema y modelo de Usuario
 const userSchema = new mongoose.Schema({
   username: String,
   password: String,
@@ -33,7 +30,7 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// Crear administrador
+// Crear usuario administrador por defecto
 async function crearAdministrador() {
   const adminExiste = await User.findOne({ username: 'admin' });
   if (!adminExiste) {
@@ -44,7 +41,7 @@ async function crearAdministrador() {
 }
 crearAdministrador();
 
-// Middlewares
+// Middleware para verificar token JWT
 function verificarToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -57,6 +54,7 @@ function verificarToken(req, res, next) {
   });
 }
 
+// Middleware para permitir solo administradores
 function soloAdmin(req, res, next) {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ mensaje: 'Acceso solo para administradores' });
@@ -64,20 +62,20 @@ function soloAdmin(req, res, next) {
   next();
 }
 
-// Modelo Auto
+// Esquema y modelo de Auto
 const autoSchema = new mongoose.Schema({
   marca: String,
   modelo: String,
   descripcion: String,
   precio: Number,
-  imagenes: [String], // ✅ Corregido: array de imágenes
-  color: String,           // Nuevo
-  kilometraje: Number,     // Nuevo
+  imagenes: [String],
+  color: String,
+  kilometraje: Number,
   anio: Number
 });
 const Auto = mongoose.model('Auto', autoSchema);
 
-// Registro
+// Registro de usuario
 app.post('/api/registro', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ mensaje: 'Faltan datos' });
@@ -91,7 +89,7 @@ app.post('/api/registro', async (req, res) => {
   res.status(201).json({ mensaje: 'Usuario registrado correctamente' });
 });
 
-// Login
+// Login de usuario
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   const user = await User.findOne({ username });
@@ -104,7 +102,7 @@ app.post('/api/login', async (req, res) => {
   res.json({ token, role: user.role });
 });
 
-// Obtener autos
+// Obtener lista de autos
 app.get('/api/autos', async (req, res) => {
   const { marca } = req.query;
   const autos = marca
@@ -113,7 +111,7 @@ app.get('/api/autos', async (req, res) => {
   res.json(autos);
 });
 
-// Subida de imágenes
+// Subida de imágenes con Multer
 const storage = multer.diskStorage({
   destination: 'public/images/',
   filename: (req, file, cb) => {
@@ -123,14 +121,15 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Crear auto (solo admin)
 app.post(
   '/api/autos',
   verificarToken,
   soloAdmin,
-  upload.array('imagenes', 10),  // acepta hasta 10 archivos en el campo 'imagenes'
+  upload.array('imagenes', 10),
   async (req, res) => {
     try {
-      const { marca, modelo, descripcion, precio } = req.body;
+      const { marca, modelo, descripcion, precio, color, kilometraje, anio } = req.body;
       const urlsImagenes = [];
 
       if (req.files && req.files.length > 0) {
@@ -145,7 +144,10 @@ app.post(
         modelo,
         descripcion,
         precio,
-        imagenes: urlsImagenes
+        imagenes: urlsImagenes,
+        color,
+        kilometraje,
+        anio
       });
 
       const autoGuardado = await nuevoAuto.save();
@@ -157,20 +159,19 @@ app.post(
   }
 );
 
-
-// Obtener un solo auto por ID
+// Obtener auto por ID
 app.get('/api/autos/:id', async (req, res) => {
   const auto = await Auto.findById(req.params.id);
   res.json(auto);
 });
 
-// Actualizar auto
+// Actualizar auto (solo admin)
 app.put('/api/autos/:id', verificarToken, soloAdmin, async (req, res) => {
   const autoActualizado = await Auto.findByIdAndUpdate(req.params.id, req.body, { new: true });
   res.json(autoActualizado);
 });
 
-// Eliminar auto
+// Eliminar auto (solo admin)
 app.delete('/api/autos/:id', verificarToken, soloAdmin, async (req, res) => {
   try {
     const auto = await Auto.findByIdAndDelete(req.params.id);
@@ -182,11 +183,7 @@ app.delete('/api/autos/:id', verificarToken, soloAdmin, async (req, res) => {
   }
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`🚗 Servidor corriendo en http://localhost:${PORT}`);
-});
-// Después de todas las rutas, agrega el manejador de errores:
+// Manejo de errores de Multer
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     console.error('Campo rechazado por Multer:', err.field);
@@ -196,5 +193,10 @@ app.use((err, req, res, next) => {
       message: err.message
     });
   }
-  next(err); // Deja que otros manejadores de error lo gestionen :contentReference[oaicite:1]{index=1}
+  next(err);
+});
+
+// Iniciar servidor
+app.listen(PORT, () => {
+  console.log(`🚗 Servidor corriendo en http://localhost:${PORT}`);
 });
