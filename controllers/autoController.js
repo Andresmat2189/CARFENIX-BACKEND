@@ -1,6 +1,6 @@
 const Auto = require('../models/Auto');
 const multer = require('multer');
-const { storage } = require('../cloudinary.config'); // Configuración de Cloudinary
+const { storage } = require('../../config/cloudinary.config'); // Configuración de Cloudinary
 const upload = multer({ storage }); // Middleware de multer configurado
 
 // Exportar middleware para usar en rutas
