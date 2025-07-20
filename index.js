@@ -1,7 +1,7 @@
 // index.js
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
+// const mongoose = require('mongoose');
 require('dotenv').config();
 const path = require('path');
 
@@ -17,14 +17,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/images', express.static(path.join(__dirname, 'public/images')));
 
-// Conexión a MongoDB
+/* Conexión a MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
 .then(() => console.log('✅ Conectado a MongoDB'))
 .catch(err => console.error('❌ Error en conexión:', err));
-
+*/
 // Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/autos', autoRoutes);
