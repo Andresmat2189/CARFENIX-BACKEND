@@ -12,7 +12,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: ['https://carfenix-frontend.vercel.app/'], // 🔴 reemplaza con tu dominio real de Vercel
+  methods: ['GET','POST','PUT','DELETE'],
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/images', express.static(path.join(__dirname, 'public/images')));
